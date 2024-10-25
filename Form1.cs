@@ -1,23 +1,31 @@
+using Microsoft.SqlServer.Server;
+using ShoppingCartApp;
 using System.Data;
 using System.Data.Common;
 using System.Data.Entity.Core.Metadata.Edm;
 using System.Data.SQLite;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.Header;
 
 namespace WinFormsApp1
 {
     public partial class Form1 : Form
     {
         private SQLiteConnection sqliteConnection;
-        private Dictionary<string, (decimal price, string category, int stock, int quantity, byte[] image)> cartProducts = new Dictionary<string, (decimal price, string category, int stock, int quantity, byte[] image)>();
-        private List<(string name, decimal price, string category, int stock, byte[] image)> RecommendedProducts = new List<(string name, decimal price, string category, int stock, byte[] image)>();
+        private Dictionary<string, CartItem> cartProducts = new Dictionary<string, CartItem>();
+        private List<Product> RecommendedProducts = new List<Product>();
+        public DateTime cartLastUpdated;
+        TimeSpan expirationDuration = TimeSpan.FromHours(24);
         public Form1()
         {
             InitializeComponent();
-            string dbpath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "database", "shopping_cart.db");
-            sqliteConnection = new SQLiteConnection($"DataSource={dbpath};Version=3;");
+            string dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "database", "shopping_cart.db");
+            string connectionString = $"Data Source={dbPath};Version=3;";
+            //MessageBox.Show($"db: {dbPath}");
+            sqliteConnection = new SQLiteConnection($"DataSource={dbPath};Version=3;");
         }
         private void Form1_Load_1(object sender, EventArgs e)
         {
+            cartLastUpdated = GetCartLastUpdated();
             LoadProductData();
             LoadCartData();
             LoadRecommededProducts();
@@ -35,6 +43,13 @@ namespace WinFormsApp1
                 flowLayoutPanel1.Controls.Clear();
                 foreach (DataRow row in table.Rows)
                 {
+                    var product = new Product(
+                    row["Name"].ToString(),
+                    Convert.ToDecimal(row["Price"]),
+                    row["Category"].ToString(),
+                    Convert.ToInt32(row["Quantity"]),
+                    (byte[])row["Image"]
+);
                     // Create a panel for each product
                     var productPanel = new Panel
                     {
@@ -101,7 +116,7 @@ namespace WinFormsApp1
                         Convert.ToInt32(row["Quantity"]),
                         imageBytes
                      );
-
+                    addCartButton.Tag = product;
                     addCartButton.Click += addToCartButtonClick;
 
                     productPanel.Controls.Add(pictureBox);
@@ -132,27 +147,22 @@ namespace WinFormsApp1
         {
             Button clicked_button = sender as Button;
 
-            if (clicked_button?.Tag is Tuple<string, decimal, string, int, byte[]> product_details)
+            if (clicked_button?.Tag is Product product)
             {
-                string product_name = product_details.Item1;
-                decimal product_price = product_details.Item2;
-                string product_category = product_details.Item3;
-                int product_quantity = 1;
-                int product_stock = product_details.Item4;
-                byte[] product_image = product_details.Item5;
 
-                if (cartProducts.ContainsKey(product_name))
+                if (cartProducts.ContainsKey(product.Name))
                 {
-                    MessageBox.Show($"{product_name} is already in the cart!");
+                    MessageBox.Show($"{product.Name} is already in the cart!");
                 }
                 else
                 {
-                    cartProducts[product_name] = (product_price, product_category, product_stock, product_quantity, product_image);
-
-                    addCartProductsToDatabase(product_name, product_price, product_category,product_stock, product_quantity, product_image);
+                    cartProducts[product.Name] = new CartItem(product, 1);
+                    addCartProductsToDatabase(product.Name, product.Price, product.Category, product.Stock, 1, product.Image);
                     RecommendedProducts.Clear();
                     LoadRecommededProducts();
 
+                    UpdateCartLastUpdated();
+                    cartLastUpdated = GetCartLastUpdated();
 
                     MessageBox.Show("Product added to the cart successfully!");
                 }
@@ -169,21 +179,23 @@ namespace WinFormsApp1
                 DataTable cartTable = new DataTable();
                 cartAdapter.Fill(cartTable);
 
-                foreach(DataRow row in cartTable.Rows)
+                foreach (DataRow row in cartTable.Rows)
                 {
-                    string pdName = row["productName"].ToString();
-                    decimal price = Convert.ToDecimal(row["Price"]);
-                    string category = row["Category"].ToString();
-                    int stock = Convert.ToInt32(row["Stock"]);
-                    int qty = Convert.ToInt32(row["Quantity"]);
-                    byte[] img = (byte[])row["Image"];
+                    var product = new Product(
+                        row["productName"].ToString(),
+                        Convert.ToDecimal(row["Price"]),
+                        row["Category"].ToString(),
+                        Convert.ToInt32(row["Stock"]),
+                        (byte[])row["Image"]
+                    );
 
-                    cartProducts[pdName] = (price, category, stock, qty, img);
+                    cartProducts[product.Name] = new CartItem(product, Convert.ToInt32(row["Quantity"]));
                 }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error in Loading Cart: {ex.Message}");
+                return;
             }
             finally
             {
@@ -195,10 +207,13 @@ namespace WinFormsApp1
         {
             flowLayoutPanel2.Controls.Clear();
 
-            
-            foreach (var item in cartProducts)
-            {
 
+            foreach (var item in cartProducts.Values)
+            {
+                if (item.Product.Stock == null || item.Product.Category == null || item.Quantity == null || item.Product.Image == null || item.Product.Price == null || item.Product.Name == null)
+                {
+                    continue;
+                }
                 var cartProductPanel = new Panel
                 {
                     Width = 420,
@@ -206,7 +221,11 @@ namespace WinFormsApp1
                     Padding = new Padding(10)
                 };
 
-                byte[] imageBytes = item.Value.image;
+                byte[] imageBytes = item.Product.Image;
+                if (imageBytes == null)
+                {
+                    continue;
+                }
                 MemoryStream ms = new MemoryStream(imageBytes);
                 Image pdImage = Image.FromStream(ms);
                 var cartPictureBox = new PictureBox
@@ -218,7 +237,7 @@ namespace WinFormsApp1
                 };
                 var cartNameLabel = new Label
                 {
-                    Text = item.Key,
+                    Text = item.Product.Name,
                     AutoSize = true,
                     Location = new Point(150, 10),
                     Font = new Font("Candara", 12, FontStyle.Bold)
@@ -226,7 +245,7 @@ namespace WinFormsApp1
                 //Label price for Products
                 var cartPriceLabel = new Label
                 {
-                    Text = $"$ {item.Value.price} ",
+                    Text = $"Rs {item.Product.Price} ",
                     AutoSize = true,
                     Location = new Point(150, 40),
                     Font = new Font("Arial", 10)
@@ -234,7 +253,7 @@ namespace WinFormsApp1
 
                 var cartCategoryLabel = new Label
                 {
-                    Text = $"Category: {item.Value.category} ",
+                    Text = $"Category: {item.Product.Category} ",
                     AutoSize = true,
                     Location = new Point(150, 60),
                     Font = new Font("Arial", 10)
@@ -253,17 +272,21 @@ namespace WinFormsApp1
                     AutoSize = false,
                     Size = new Size(32, 23),
                     Minimum = 1,
-                    Maximum = item.Value.stock - 20,
+                    Maximum = item.Product.Stock - 20,
                     ReadOnly = true,
                     Cursor = null,
-                    Value = item.Value.quantity,
+                    Value = item.Quantity,
                     Location = new Point(370, 70)
                 };
                 //updating value in dictionary to persist changes
                 quantityCounter.ValueChanged += (sender, e) =>
                 {
-                    cartProducts[item.Key] = (item.Value.price, item.Value.category, item.Value.stock, (int)quantityCounter.Value, item.Value.image);
-                    UpdateCartQuantity(item.Key,(int)quantityCounter.Value);   
+                    UpdateCartLastUpdated();
+                    cartLastUpdated = GetCartLastUpdated();
+                    item.Quantity = (int)quantityCounter.Value;
+                    UpdateCartQuantity(item.Product.Name, item.Quantity);
+                    CalculateSubTotal();
+
                 };
 
                 var removeProductButton = new Button
@@ -272,6 +295,7 @@ namespace WinFormsApp1
                     Location = new Point(315, 40),
 
                 };
+                removeProductButton.Click += (sender, e) => RemoveCartProduct(item.Product.Name);
 
                 cartProductPanel.Controls.Add(cartPictureBox);
                 cartProductPanel.Controls.Add(cartNameLabel);
@@ -283,8 +307,38 @@ namespace WinFormsApp1
 
                 flowLayoutPanel2.Controls.Add(cartProductPanel);
 
+            }
+            CalculateSubTotal();
 
+        }
 
+        public void RemoveCartProduct(string productName)
+        {
+            try
+            {
+                sqliteConnection.Open();
+                string query = "DELETE FROM CART WHERE productName = @productName";
+                using (SQLiteCommand cmd = new SQLiteCommand(query, sqliteConnection))
+                {
+                    cmd.Parameters.AddWithValue("@productName", productName);
+                    cmd.ExecuteNonQuery();
+                }
+                if (cartProducts.ContainsKey(productName))
+                {
+                    cartProducts.Remove(productName);
+                    MessageBox.Show("Product removed from the cart successfully.");
+
+                }
+
+                CartDisplayTab();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error removing product: " + ex.Message);
+            }
+            finally
+            {
+                sqliteConnection.Close();
             }
         }
 
@@ -292,12 +346,14 @@ namespace WinFormsApp1
         {
             if (tabControl1.SelectedTab == tabPage2)
             {
+                CheckCartExpiration();
+                LoadCartData();
                 CartDisplayTab();
             }
 
         }
 
-        private void addCartProductsToDatabase(string name,decimal price,string category,int stock,int quantity, byte[]image)
+        private void addCartProductsToDatabase(string name, decimal price, string category, int stock, int quantity, byte[] image)
         {
             try
             {
@@ -308,24 +364,26 @@ namespace WinFormsApp1
                     command.Parameters.AddWithValue("@productName", name);
                     command.Parameters.AddWithValue("@Price", price);
                     command.Parameters.AddWithValue("@Category", category);
-                    command.Parameters.AddWithValue("@Stock",stock);
+                    command.Parameters.AddWithValue("@Stock", stock);
                     command.Parameters.AddWithValue("@Quantity", quantity);
                     command.Parameters.AddWithValue("@Image", image);
+
                     command.ExecuteNonQuery();
+
                 }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error in Saving Cart Data: {ex.Message}");
             }
-            finally 
-            { 
-                sqliteConnection.Close(); 
+            finally
+            {
+                sqliteConnection.Close();
             }
 
         }
 
-        private void UpdateCartQuantity(string productName,int quantity)
+        private void UpdateCartQuantity(string productName, int quantity)
         {
             try
             {
@@ -339,8 +397,9 @@ namespace WinFormsApp1
                     command.ExecuteNonQuery();
                 }
             }
-            catch (Exception ex) {
-                MessageBox.Show( $"Error: {ex.Message}");
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error: {ex.Message}");
 
             }
             finally
@@ -351,18 +410,18 @@ namespace WinFormsApp1
 
         private List<string> GetRecommededCategories()
         {
-            var LastTwoCartCategories = cartProducts.Reverse().Take(2).Select(p => p.Value.category).ToList();
+            var LastTwoCartCategories = cartProducts.Reverse().Take(2).Select(p => p.Value.Product.Category).ToList();
 
             return LastTwoCartCategories;
         }
 
-        private void SetRecommededProducts(List<string>recommendedCategories)
+        private void SetRecommededProducts(List<string> recommendedCategories)
         {
             try
             {
                 sqliteConnection.Open();
 
-                foreach(string category in recommendedCategories)
+                foreach (string category in recommendedCategories)
                 {
                     var cartProductNames = string.Join(",", cartProducts.Keys.Select(n => $"'{n}'"));
                     string query = $"SELECT * FROM PRODUCTS WHERE Category= @Category AND Name NOT IN ({cartProductNames}) LIMIT 2";
@@ -371,28 +430,26 @@ namespace WinFormsApp1
                     {
                         command.Parameters.AddWithValue("@Category", category);
 
-                        //adjusting cart products names according to sql query syntax
-                       
-                        //command.Parameters.AddWithValue("@CartProductsNames", cartProductNames);
-
-                        using (SQLiteDataReader productReader= command.ExecuteReader())
+                        using (SQLiteDataReader productReader = command.ExecuteReader())
                         {
-                            while(productReader.Read())
+                            while (productReader.Read())
                             {
-                                string name = productReader["Name"].ToString();
-                                decimal price = Convert.ToDecimal(productReader["Price"]);
-                                string pd_category = productReader["Category"].ToString();
-                                int stock = Convert.ToInt32(productReader["Quantity"]);
-                                byte[] img = (byte[])productReader["image"];
+                                var product = new Product(
+                                productReader["Name"].ToString(),
+                                Convert.ToDecimal(productReader["Price"]),
+                                productReader["Category"].ToString(),
+                                Convert.ToInt32(productReader["Quantity"]),
+                                (byte[])productReader["Image"]
+                            );
 
-                                RecommendedProducts.Add((name, price, pd_category, stock, img));
+                                RecommendedProducts.Add(product);
                             }
                         }
                     }
 
                 }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 MessageBox.Show($"Error in Showing Recommeded Products : {ex.Message}");
             }
@@ -411,7 +468,7 @@ namespace WinFormsApp1
 
             flowLayoutPanelRecommendations.Controls.Clear();
 
-            foreach(var pd in RecommendedProducts)
+            foreach (var pd in RecommendedProducts)
             {
                 var productPanel = new Panel
                 {
@@ -420,7 +477,7 @@ namespace WinFormsApp1
                     Margin = new Padding(10)
                 };
 
-                byte[] imageBytes = pd.image;
+                byte[] imageBytes = pd.Image;
                 MemoryStream ms = new MemoryStream(imageBytes);
                 Image pdImage = Image.FromStream(ms);
                 // PictureBox for the product image
@@ -434,7 +491,7 @@ namespace WinFormsApp1
                 //Label name for Products
                 var recommendedName = new Label
                 {
-                    Text = pd.name.ToString(),
+                    Text = pd.Name.ToString(),
                     AutoSize = true,
                     Location = new Point(150, 10),
                     Font = new Font("Candara", 12, FontStyle.Bold)
@@ -442,7 +499,7 @@ namespace WinFormsApp1
                 //Label price for Products
                 var recommendedPrice = new Label
                 {
-                    Text = $"Rs {pd.price.ToString()} ",
+                    Text = $"Rs {pd.Price.ToString()} ",
                     AutoSize = true,
                     Location = new Point(150, 30),
                     Font = new Font("Arial", 10)
@@ -450,14 +507,14 @@ namespace WinFormsApp1
 
                 var recommendedCategory = new Label
                 {
-                    Text = $"Category: {pd.category.ToString()} ",
+                    Text = $"Category: {pd.Category.ToString()} ",
                     AutoSize = true,
                     Location = new Point(150, 50),
                     Font = new Font("Arial", 10)
                 };
                 var recommendedStock = new Label
                 {
-                    Text = $"Stock left: {pd.stock.ToString()} ",
+                    Text = $"Stock left: {pd.Stock.ToString()} ",
                     AutoSize = true,
                     Location = new Point(150, 70),
                     Font = new Font("Arial", 10)
@@ -470,14 +527,7 @@ namespace WinFormsApp1
                     Location = new Point(300, 60)
                 };
 
-                addCartButton.Tag = new Tuple<string, decimal, string, int, byte[]>
-                 (
-                    pd.name.ToString(),
-                    Convert.ToDecimal(pd.price),
-                    pd.category.ToString(),
-                    Convert.ToInt32(pd.stock),
-                    imageBytes
-                 );
+                addCartButton.Tag = pd;
 
                 addCartButton.Click += addToCartButtonClick;
 
@@ -497,43 +547,89 @@ namespace WinFormsApp1
 
         }
 
-        private void numericUpDown1_ValueChanged(object sender, EventArgs e)
+        public void UpdateCartLastUpdated()
         {
+            try
+            {
+                sqliteConnection.Open();
+                string query = "INSERT OR REPLACE INTO Config (Key, Value) VALUES ('cartLastUpdated', @LastUpdated)";
+                using (var command = new SQLiteCommand(query, sqliteConnection))
+                {
+                    command.Parameters.AddWithValue("@LastUpdated", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                    command.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+            finally
+            {
+                sqliteConnection.Close();
+            }
 
         }
+
+        public DateTime GetCartLastUpdated()
+        {
+            try
+            {
+                sqliteConnection.Open();
+                string query = "SELECT Value FROM Config WHERE Key = 'cartLastUpdated'";
+                using (var command = new SQLiteCommand(query, sqliteConnection))
+                {
+                    command.Parameters.AddWithValue("@LastUpdated", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                    var result = command.ExecuteScalar();
+                    if (result != null && result != DBNull.Value)
+                    {
+                        return DateTime.Parse(result.ToString());
+                    }
+                }
+
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message);
+            }
+            finally
+            {
+                sqliteConnection.Close();
+            }
+            return DateTime.MinValue;
+        }
+        public bool isCartExpired()
+        {
+
+            cartLastUpdated = GetCartLastUpdated();
+            TimeSpan timeLeft = DateTime.Now - cartLastUpdated;
+            return timeLeft > expirationDuration;
+
+        }
+
+        public void CheckCartExpiration()
+        {
+            if (isCartExpired())
+            {
+                cartProducts.Clear();
+                MessageBox.Show("Your cart has expired and has been cleared.");
+            }
+        }
+
+
+        private void cart_expiration_Click(object sender, EventArgs e)
+        {
+            TimeSpan timeleft = expirationDuration - (DateTime.Now - cartLastUpdated);
+            string time_left_formatted = string.Format("{0:D2}:{1:D2}:{2:D2}",
+            timeleft.Hours,
+            timeleft.Minutes,
+            timeleft.Seconds);
+            MessageBox.Show($"Cart Last Updated : {cartLastUpdated} \nTime left for cart expiration : {time_left_formatted}");
+
+        }
+
+
+
         private void flowLayoutPanel1_Paint(object sender, PaintEventArgs e)
-        {
-
-        }
-
-        private void label1_Click(object sender, EventArgs e)
-        {
-
-        }
-
-        private void label3_Click(object sender, EventArgs e)
-        {
-
-        }
-
-        private void label4_Click(object sender, EventArgs e)
-        {
-
-        }
-
-
-
-        private void label7_Click(object sender, EventArgs e)
-        {
-
-        }
-
-        private void label8_Click(object sender, EventArgs e)
-        {
-
-        }
-
-        private void panel1_Paint(object sender, PaintEventArgs e)
         {
 
         }
@@ -542,6 +638,64 @@ namespace WinFormsApp1
         {
 
         }
+
+        private void UpdateSubTotalLabel(decimal total)
+        {
+            sub_total.Text = $"Rs {total}";
+            sub_total.Font = new Font("Arial", 12);
+            sub_total.AutoSize = true;
+        }
+        public decimal CalculateSubTotal()
+        {
+            decimal subTotal = 0;
+            foreach (var item in cartProducts.Values)
+            {
+                subTotal += item.Product.Price * item.Quantity;
+            }
+
+            UpdateSubTotalLabel(subTotal);
+            return subTotal;
+        }
+
+        private void checkout_button_Click(object sender, EventArgs e)
+        {
+            using(Form2 checkoutForm = new Form2(cartProducts,this))
+            {
+                checkoutForm.ShowDialog();
+            }
+        }
+
     }
+
+    public class Product
+    {
+        public string Name { get; set; }
+        public decimal Price { get; set; }
+        public string Category { get; set; }
+        public int Stock { get; set; }
+        public byte[] Image { get; set; }
+
+        public Product(string name, decimal price, string category, int stock, byte[] image)
+        {
+            Name = name;
+            Price = price;
+            Category = category;
+            Stock = stock;
+            Image = image;
+
+        }
+    }
+
+    public class CartItem
+    {
+        public Product Product { get; set; }
+        public int Quantity { get; set; }
+        public CartItem(Product product, int quantity)
+        {
+            Product = product;
+            Quantity = quantity;
+        }
+    }
+
 }
        

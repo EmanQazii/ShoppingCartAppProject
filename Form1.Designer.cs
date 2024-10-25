@@ -44,6 +44,10 @@
             label11 = new Label();
             label8 = new Label();
             tabPage2 = new TabPage();
+            checkout_button = new Button();
+            sub_total = new Label();
+            label12 = new Label();
+            cart_expiration = new Button();
             flowLayoutPanel2 = new FlowLayoutPanel();
             pictureBox2 = new PictureBox();
             label4 = new Label();
@@ -51,7 +55,7 @@
             label6 = new Label();
             label7 = new Label();
             numericUpDown1 = new NumericUpDown();
-            button2 = new Button();
+            remove_button = new Button();
             flowLayoutPanel1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)pictureBox1).BeginInit();
             tabControl1.SuspendLayout();
@@ -97,7 +101,6 @@
             label1.TabIndex = 1;
             label1.Text = "label1";
             label1.TextAlign = ContentAlignment.MiddleCenter;
-            label1.Click += label1_Click;
             // 
             // button1
             // 
@@ -125,7 +128,6 @@
             label3.Size = new Size(38, 16);
             label3.TabIndex = 3;
             label3.Text = "label3";
-            label3.Click += label3_Click;
             // 
             // tabControl1
             // 
@@ -223,11 +225,14 @@
             label8.Size = new Size(282, 17);
             label8.TabIndex = 3;
             label8.Text = "Recommended Products:";
-            label8.Click += label8_Click;
             // 
             // tabPage2
             // 
             tabPage2.BackColor = Color.MistyRose;
+            tabPage2.Controls.Add(checkout_button);
+            tabPage2.Controls.Add(sub_total);
+            tabPage2.Controls.Add(label12);
+            tabPage2.Controls.Add(cart_expiration);
             tabPage2.Controls.Add(flowLayoutPanel2);
             tabPage2.Location = new Point(4, 25);
             tabPage2.Name = "tabPage2";
@@ -236,11 +241,57 @@
             tabPage2.TabIndex = 1;
             tabPage2.Text = "Cart";
             // 
+            // checkout_button
+            // 
+            checkout_button.BackColor = Color.SeaShell;
+            checkout_button.Font = new Font("Candara Light", 14.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            checkout_button.Location = new Point(16, 522);
+            checkout_button.Margin = new Padding(3, 2, 3, 2);
+            checkout_button.Name = "checkout_button";
+            checkout_button.Size = new Size(452, 66);
+            checkout_button.TabIndex = 11;
+            checkout_button.Text = "Check Out ";
+            checkout_button.UseVisualStyleBackColor = false;
+            checkout_button.Click += checkout_button_Click;
+            // 
+            // sub_total
+            // 
+            sub_total.AutoSize = true;
+            sub_total.BackColor = Color.White;
+            sub_total.Font = new Font("Segoe UI Emoji", 11.25F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            sub_total.ForeColor = SystemColors.ActiveCaptionText;
+            sub_total.Location = new Point(333, 483);
+            sub_total.Name = "sub_total";
+            sub_total.Size = new Size(71, 20);
+            sub_total.TabIndex = 10;
+            sub_total.Text = "sub_price";
+            // 
+            // label12
+            // 
+            label12.AutoSize = true;
+            label12.Font = new Font("Candara", 15.75F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            label12.Location = new Point(212, 477);
+            label12.Name = "label12";
+            label12.Size = new Size(106, 26);
+            label12.TabIndex = 9;
+            label12.Text = "Sub Total :";
+            // 
+            // cart_expiration
+            // 
+            cart_expiration.BackColor = Color.Snow;
+            cart_expiration.Font = new Font("Candara", 9.75F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            cart_expiration.Location = new Point(16, 474);
+            cart_expiration.Name = "cart_expiration";
+            cart_expiration.Size = new Size(162, 34);
+            cart_expiration.TabIndex = 1;
+            cart_expiration.Text = "Check Cart Expiration";
+            cart_expiration.UseVisualStyleBackColor = false;
+            cart_expiration.Click += cart_expiration_Click;
+            // 
             // flowLayoutPanel2
             // 
             flowLayoutPanel2.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             flowLayoutPanel2.AutoScroll = true;
-            flowLayoutPanel2.AutoSize = true;
             flowLayoutPanel2.BackColor = Color.Snow;
             flowLayoutPanel2.Controls.Add(pictureBox2);
             flowLayoutPanel2.Controls.Add(label4);
@@ -248,7 +299,7 @@
             flowLayoutPanel2.Controls.Add(label6);
             flowLayoutPanel2.Controls.Add(label7);
             flowLayoutPanel2.Controls.Add(numericUpDown1);
-            flowLayoutPanel2.Controls.Add(button2);
+            flowLayoutPanel2.Controls.Add(remove_button);
             flowLayoutPanel2.Location = new Point(16, 16);
             flowLayoutPanel2.Name = "flowLayoutPanel2";
             flowLayoutPanel2.Size = new Size(452, 443);
@@ -271,7 +322,6 @@
             label4.TabIndex = 1;
             label4.Text = "label4";
             label4.TextAlign = ContentAlignment.MiddleCenter;
-            label4.Click += label4_Click;
             // 
             // label5
             // 
@@ -300,7 +350,6 @@
             label7.Size = new Size(51, 16);
             label7.TabIndex = 6;
             label7.Text = "quantity";
-            label7.Click += label7_Click;
             // 
             // numericUpDown1
             // 
@@ -311,16 +360,15 @@
             numericUpDown1.Size = new Size(32, 23);
             numericUpDown1.TabIndex = 5;
             numericUpDown1.Value = new decimal(new int[] { 1, 0, 0, 0 });
-            numericUpDown1.ValueChanged += numericUpDown1_ValueChanged;
             // 
-            // button2
+            // remove_button
             // 
-            button2.Location = new Point(196, 119);
-            button2.Name = "button2";
-            button2.Size = new Size(75, 23);
-            button2.TabIndex = 7;
-            button2.Text = "remove";
-            button2.UseVisualStyleBackColor = true;
+            remove_button.Location = new Point(196, 119);
+            remove_button.Name = "remove_button";
+            remove_button.Size = new Size(75, 23);
+            remove_button.TabIndex = 7;
+            remove_button.Text = "remove";
+            remove_button.UseVisualStyleBackColor = true;
             // 
             // Form1
             // 
@@ -368,7 +416,7 @@
         private Label label6;
         private NumericUpDown numericUpDown1;
         private Label label7;
-        private Button button2;
+        private Button remove_button;
         private Label label8;
         private FlowLayoutPanel flowLayoutPanelRecommendations;
         private PictureBox pictureBox3;
@@ -376,5 +424,9 @@
         private Button button3;
         private Label label10;
         private Label label11;
+        private Button cart_expiration;
+        private Label sub_total;
+        private Label label12;
+        private Button checkout_button;
     }
 }
